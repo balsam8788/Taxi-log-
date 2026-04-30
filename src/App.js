@@ -92,7 +92,7 @@ function HomeScreen({ shifts, daily, weekly, monthly, yearly, syncStatus, onRefr
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
           <div>
             <div style={{ color:"rgba(255,255,255,0.7)", fontSize:13 }}>Welcome back 👋</div>
-            <div style={{ color:"#fff", fontSize:22, fontWeight:800 }}>Your Dashboard</div>
+            <div style={{ color:"#fff", fontSize:22, fontWeight:800 }}>Aslam</div>
           </div>
           <button onClick={onRefresh} style={{ width:42,height:42,background:"rgba(255,255,255,0.15)",borderRadius:14,border:"none",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,cursor:"pointer" }}>🔄</button>
         </div>
