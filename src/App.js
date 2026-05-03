@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ═══════════════════════════════════════════════════════════════
 //  PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
 // ═══════════════════════════════════════════════════════════════
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbxzg9qD3CFEy6ykmSrOYuFoaiNDefWGTCRg7p87zxvvzfKRlB9p7uphOQDjjLhD-5oWqA/exec";
+const SHEET_URL = "YOUR_APPS_SCRIPT_URL_HERE";
 // ═══════════════════════════════════════════════════════════════
 
 const STORAGE_KEY = "taxi_shifts_v3";
@@ -216,60 +216,183 @@ function LogScreen({ fares, tips, expenses, setFares, setTips, setExpenses, onSa
 }
 
 // ── ACTIVITY ──────────────────────────────────────────────────
-function ActivityScreen({ daily, weekly, monthly, yearly, totalFares, totalTips, totalExpenses, onBack }) {
-  const donutData = [
-    { label:"Fares",    value:totalFares,    color:"#7c3aed" },
-    { label:"Tips",     value:totalTips,     color:"#a78bfa" },
-    { label:"Expenses", value:totalExpenses, color:"#fbbf24" },
+function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, totalTips, totalExpenses, onBack }) {
+  const [tab, setTab] = useState("income");
+
+  // Income donut: fares + tips
+  const incomeDonutData = [
+    { label:"Fares", value:totalFares, color:"#7c3aed" },
+    { label:"Tips",  value:totalTips,  color:"#a78bfa" },
   ].filter(d => d.value > 0);
-  const donutTotal = totalFares + totalTips + totalExpenses;
+  const incomeTotal = totalFares + totalTips;
+
+  // Expenses donut (single slice for now, extensible)
+  const expDonutData = [
+    { label:"Expenses", value:totalExpenses, color:"#f59e0b" },
+  ].filter(d => d.value > 0);
+
+  // Per-period helpers
+  const sumFares   = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.fares)||0), 0);
+  const sumTips    = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.tips)||0), 0);
+  const sumExp     = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.expenses)||0), 0);
+
+  const periods = [
+    { label:"Today",      icon:"☀️", fn: d => d === todayKey() },
+    { label:"This Week",  icon:"📅", fn: d => d >= weekStartKey() },
+    { label:"This Month", icon:"🗓️", fn: d => d.startsWith(monthKey()) },
+    { label:"This Year",  icon:"📊", fn: d => d.startsWith(new Date().getFullYear().toString()) },
+  ];
+
   const netAll = totalFares + totalTips - totalExpenses;
+
+  const Pill = ({ id, label }) => (
+    <button onClick={() => setTab(id)} style={{
+      flex:1, padding:"10px 0", borderRadius:50, border:"none", cursor:"pointer",
+      fontWeight:700, fontSize:13, letterSpacing:"0.02em",
+      background: tab===id ? (id==="income" ? "linear-gradient(135deg,#6d28d9,#8b5cf6)" : "linear-gradient(135deg,#d97706,#fbbf24)") : "transparent",
+      color: tab===id ? "#fff" : "#9ca3af",
+      transition:"all 0.25s",
+      boxShadow: tab===id ? "0 4px 14px rgba(109,40,217,0.25)" : "none",
+    }}>{label}</button>
+  );
+
   return (
     <div style={{ padding:"0 18px 20px" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"52px 0 20px" }}>
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"52px 0 16px" }}>
         <button onClick={onBack} style={{ width:42,height:42,background:"#fff",border:"none",borderRadius:14,fontSize:20,cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.08)",color:"#6d28d9" }}>‹</button>
         <div style={{ fontWeight:800, fontSize:18, color:"#1e1b4b" }}>Activity</div>
         <div style={{ width:42 }} />
       </div>
-      <div style={{ background:"linear-gradient(150deg,#ede9fe 0%,#ddd6fe 100%)", borderRadius:24, padding:"22px 20px 28px", marginBottom:20 }}>
-        <div style={{ fontSize:12, color:"#7c3aed", fontWeight:600 }}>Total All-Time Net</div>
-        <div style={{ fontSize:30, fontWeight:900, color:"#4c1d95", marginBottom:22, letterSpacing:"-0.5px" }}>{fmt(netAll)}</div>
-        <div style={{ display:"flex", justifyContent:"center", position:"relative" }}>
-          <DonutChart data={donutData} total={donutTotal} />
-          <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", textAlign:"center", pointerEvents:"none" }}>
-            <div style={{ fontSize:18, fontWeight:900, color:"#4c1d95" }}>{fmt(netAll)}</div>
-            <div style={{ fontSize:10, color:"#7c3aed", fontWeight:600 }}>Net Earned</div>
-          </div>
-        </div>
+
+      {/* Pill tabs */}
+      <div style={{ display:"flex", background:"#ede9fe", borderRadius:50, padding:4, marginBottom:20, gap:4 }}>
+        <Pill id="income"   label="💰 Income" />
+        <Pill id="expenses" label="⛽ Expenses" />
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:22 }}>
-        {[
-          { l:"Fares",    v:totalFares,    c:"#7c3aed", bg:"#f5f3ff", f:fmt },
-          { l:"Tips",     v:totalTips,     c:"#8b5cf6", bg:"#f5f3ff", f:fmtTips },
-          { l:"Expenses", v:totalExpenses, c:"#d97706", bg:"#fffbeb", f:fmt },
-        ].map(({ l, v, c, bg, f }) => (
-          <div key={l} style={{ background:bg, borderRadius:16, padding:"14px 12px" }}>
-            <div style={{ width:8,height:8,borderRadius:"50%",background:c,marginBottom:6 }} />
-            <div style={{ fontSize:10, color:"#6b7280", marginBottom:3 }}>{l}</div>
-            <div style={{ fontSize:12, fontWeight:800, color:c }}>{f(v)}</div>
+
+      {/* ── INCOME TAB ── */}
+      {tab === "income" && (
+        <>
+          {/* Summary card */}
+          <div style={{ background:"linear-gradient(150deg,#ede9fe 0%,#ddd6fe 100%)", borderRadius:24, padding:"22px 20px 28px", marginBottom:18 }}>
+            <div style={{ fontSize:12, color:"#7c3aed", fontWeight:600 }}>Total Income (All Time)</div>
+            <div style={{ fontSize:28, fontWeight:900, color:"#4c1d95", marginBottom:4, letterSpacing:"-0.5px" }}>{fmt(incomeTotal)}</div>
+            <div style={{ fontSize:11, color:"#7c3aed", marginBottom:20 }}>Net after expenses: <strong>{fmt(netAll)}</strong></div>
+            <div style={{ display:"flex", justifyContent:"center", position:"relative" }}>
+              <DonutChart data={incomeDonutData} total={incomeTotal} />
+              <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", textAlign:"center", pointerEvents:"none" }}>
+                <div style={{ fontSize:17, fontWeight:900, color:"#4c1d95" }}>{fmt(incomeTotal)}</div>
+                <div style={{ fontSize:10, color:"#7c3aed", fontWeight:600 }}>Earned</div>
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
-      <div style={{ fontWeight:700, fontSize:15, color:"#1e1b4b", marginBottom:12 }}>Period Breakdown</div>
-      {[
-        { label:"Today",      val:daily,   icon:"☀️" },
-        { label:"This Week",  val:weekly,  icon:"📅" },
-        { label:"This Month", val:monthly, icon:"🗓️" },
-        { label:"This Year",  val:yearly,  icon:"📊" },
-      ].map(({ label, val, icon }) => (
-        <div key={label} style={{ background:"#fff", borderRadius:16, padding:"14px 18px", marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center", boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <span style={{ fontSize:18 }}>{icon}</span>
-            <span style={{ fontWeight:600, color:"#374151", fontSize:14 }}>{label}</span>
+
+          {/* Fares vs Tips breakdown */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+            {[
+              { l:"Total Fares", v:totalFares, c:"#7c3aed", bg:"#f5f3ff", pct: incomeTotal>0 ? Math.round(totalFares/incomeTotal*100) : 0 },
+              { l:"Total Tips",  v:totalTips,  c:"#8b5cf6", bg:"#f5f3ff", pct: incomeTotal>0 ? Math.round(totalTips/incomeTotal*100)  : 0, plain:true },
+            ].map(({ l, v, c, bg, pct, plain }) => (
+              <div key={l} style={{ background:bg, borderRadius:18, padding:"16px 14px" }}>
+                <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>{l}</div>
+                <div style={{ fontSize:18, fontWeight:900, color:c, marginBottom:6 }}>{plain ? fmtTips(v) : fmt(v)}</div>
+                <div style={{ background:"#ddd6fe", borderRadius:10, height:6 }}>
+                  <div style={{ width:`${pct}%`, background:c, borderRadius:10, height:6, transition:"width 0.5s" }} />
+                </div>
+                <div style={{ fontSize:10, color:c, marginTop:4, fontWeight:600 }}>{pct}% of income</div>
+              </div>
+            ))}
           </div>
-          <span style={{ fontWeight:800, color:"#6d28d9", fontSize:15 }}>{fmt(val)}</span>
-        </div>
-      ))}
+
+          {/* Period breakdown */}
+          <div style={{ fontWeight:700, fontSize:15, color:"#1e1b4b", marginBottom:12 }}>Period Breakdown</div>
+          {periods.map(({ label, icon, fn }) => {
+            const f = sumFares(fn), t = sumTips(fn), net = f + t;
+            return (
+              <div key={label} style={{ background:"#fff", borderRadius:16, padding:"14px 16px", marginBottom:10, boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:16 }}>{icon}</span>
+                    <span style={{ fontWeight:700, color:"#1e1b4b", fontSize:14 }}>{label}</span>
+                  </div>
+                  <span style={{ fontWeight:900, color:"#6d28d9", fontSize:15 }}>{fmt(net)}</span>
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <div style={{ flex:1, background:"#f5f3ff", borderRadius:10, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>FARES</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>{fmt(f)}</div>
+                  </div>
+                  <div style={{ flex:1, background:"#f0fdf4", borderRadius:10, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>TIPS</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:"#059669" }}>{fmtTips(t)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {/* ── EXPENSES TAB ── */}
+      {tab === "expenses" && (
+        <>
+          {/* Summary card */}
+          <div style={{ background:"linear-gradient(150deg,#fef9c3 0%,#fde68a 100%)", borderRadius:24, padding:"22px 20px 28px", marginBottom:18 }}>
+            <div style={{ fontSize:12, color:"#92400e", fontWeight:600 }}>Total Expenses (All Time)</div>
+            <div style={{ fontSize:28, fontWeight:900, color:"#92400e", marginBottom:4, letterSpacing:"-0.5px" }}>{fmt(totalExpenses)}</div>
+            <div style={{ fontSize:11, color:"#b45309", marginBottom:20 }}>
+              {incomeTotal > 0 ? `${Math.round(totalExpenses/incomeTotal*100)}% of gross income` : "No income recorded"}
+            </div>
+            <div style={{ display:"flex", justifyContent:"center", position:"relative" }}>
+              <DonutChart data={expDonutData} total={totalExpenses || 1} />
+              <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", textAlign:"center", pointerEvents:"none" }}>
+                <div style={{ fontSize:17, fontWeight:900, color:"#92400e" }}>{fmt(totalExpenses)}</div>
+                <div style={{ fontSize:10, color:"#b45309", fontWeight:600 }}>Spent</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Net impact card */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+            <div style={{ background:"#fff7ed", borderRadius:18, padding:"16px 14px" }}>
+              <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>Gross Income</div>
+              <div style={{ fontSize:16, fontWeight:900, color:"#059669" }}>{fmt(incomeTotal)}</div>
+              <div style={{ fontSize:10, color:"#6b7280", marginTop:4 }}>Fares + Tips</div>
+            </div>
+            <div style={{ background:"#fff7ed", borderRadius:18, padding:"16px 14px" }}>
+              <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>Net Profit</div>
+              <div style={{ fontSize:16, fontWeight:900, color: netAll>=0?"#059669":"#dc2626" }}>{fmt(netAll)}</div>
+              <div style={{ fontSize:10, color:"#6b7280", marginTop:4 }}>After expenses</div>
+            </div>
+          </div>
+
+          {/* Period breakdown */}
+          <div style={{ fontWeight:700, fontSize:15, color:"#1e1b4b", marginBottom:12 }}>Period Breakdown</div>
+          {periods.map(({ label, icon, fn }) => {
+            const e = sumExp(fn), inc = sumFares(fn) + sumTips(fn);
+            const pct = inc > 0 ? Math.round(e/inc*100) : 0;
+            return (
+              <div key={label} style={{ background:"#fff", borderRadius:16, padding:"14px 16px", marginBottom:10, boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:16 }}>{icon}</span>
+                    <span style={{ fontWeight:700, color:"#1e1b4b", fontSize:14 }}>{label}</span>
+                  </div>
+                  <span style={{ fontWeight:900, color:"#d97706", fontSize:15 }}>{fmt(e)}</span>
+                </div>
+                {/* Expense vs income bar */}
+                <div style={{ background:"#f3f4f6", borderRadius:10, height:8, marginBottom:6, overflow:"hidden" }}>
+                  <div style={{ width:`${Math.min(pct,100)}%`, background:"linear-gradient(90deg,#f59e0b,#fbbf24)", borderRadius:10, height:8, transition:"width 0.5s" }} />
+                </div>
+                <div style={{ fontSize:11, color:"#9ca3af" }}>
+                  <span style={{ color:"#d97706", fontWeight:700 }}>{pct}%</span> of income · Income: {fmt(inc)}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
@@ -417,7 +540,7 @@ export default function App() {
           onBack={() => setScreen("home")} />
       )}
       {screen === "activity" && (
-        <ActivityScreen daily={daily} weekly={weekly} monthly={monthly} yearly={yearly}
+        <ActivityScreen shifts={shifts} daily={daily} weekly={weekly} monthly={monthly} yearly={yearly}
           totalFares={totalFares} totalTips={totalTips} totalExpenses={totalExpenses}
           onBack={() => setScreen("home")} />
       )}
