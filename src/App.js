@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 // ═══════════════════════════════════════════════════════════════
 //  PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
