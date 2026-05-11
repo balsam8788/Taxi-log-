@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 // ═══════════════════════════════════════════════════════════════
 //  PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
 // ═══════════════════════════════════════════════════════════════
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbxZ9feOHzUSX3-6U-KMX_ptASkb_WdRp22WT1Yo7SJohCG7w5NoJ8KOb46UVG-OAwV86w/exec";
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbwOxkNMknkYLd04iRUdEQiWhThsHmgq1NHgkQXQFhb5YM2D_mjMdpuDJGI3JaoEA0Mfdg/exec";
 // ═══════════════════════════════════════════════════════════════
 
 const STORAGE_KEY = "taxi_shifts_v3";
