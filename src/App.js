@@ -22,21 +22,37 @@ const netOf = (s) => (Number(s.fares)||0) + (Number(s.tips)||0) - (Number(s.expe
 const isConfigured = () => SHEET_URL && SHEET_URL !== "YOUR_APPS_SCRIPT_URL_HERE";
 
 // ── Google Sheets API helpers ─────────────────────────────────
+// ── Updated Google Sheets API helpers ─────────────────────────────────
 async function sheetFetch() {
-  const res = await fetch(SHEET_URL);
+  const res = await fetch(SHEET_URL, {
+    mode: "cors",
+    redirect: "follow"
+  });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error);
   return data.shifts;
 }
+
 async function sheetSave(shift) {
   await fetch(SHEET_URL, {
     method: "POST",
+    mode: "cors",
+    redirect: "follow",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
     body: JSON.stringify({ action: "save", shift }),
   });
 }
+
 async function sheetDelete(id) {
   await fetch(SHEET_URL, {
     method: "POST",
+    mode: "cors",
+    redirect: "follow",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
     body: JSON.stringify({ action: "delete", id }),
   });
 }
