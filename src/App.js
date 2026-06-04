@@ -21,11 +21,26 @@ const netOf = (s) => (Number(s.fares)||0) - (Number(s.fuel)||0) - (Number(s.othe
 const isConfigured = () => SHEET_URL && SHEET_URL !== "YOUR_APPS_SCRIPT_URL_HERE";
 
 // Migrates old schema fields (tips → ignored, expenses → otherExp) to new schema
-const migrateShift = (s) => ({
-  ...s,
-  fuel:     s.fuel     !== undefined ? s.fuel     : 0,
-  otherExp: s.otherExp !== undefined ? s.otherExp : (s.expenses !== undefined ? s.expenses : 0),
-});
+const migrateShift = (s) => {
+  // Normalize date: sheet may return a Date object or ISO string
+  let date = s.date;
+  if (date instanceof Date || (typeof date === 'string' && date.includes('T'))) {
+    date = new Date(date).toISOString().slice(0, 10);
+  }
+  // Normalize time: sheet may return a Date object (time stored as date)
+  let time = s.time;
+  if (time instanceof Date || (typeof time === 'string' && time.includes('T'))) {
+    const t = new Date(time);
+    time = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return {
+    ...s,
+    date,
+    time,
+    fuel:     s.fuel     !== undefined ? s.fuel     : 0,
+    otherExp: s.otherExp !== undefined ? s.otherExp : (s.expenses !== undefined ? s.expenses : 0),
+  };
+};
 
 // ── Google Sheets API helpers ─────────────────────────────────
 async function sheetFetch() {
