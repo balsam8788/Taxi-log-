@@ -22,7 +22,6 @@ const netOf = (s) => (Number(s.fares)||0) + (Number(s.tips)||0) - (Number(s.expe
 const isConfigured = () => SHEET_URL && SHEET_URL !== "YOUR_APPS_SCRIPT_URL_HERE";
 
 // ── Google Sheets API helpers ─────────────────────────────────
-// ── Updated Google Sheets API helpers ─────────────────────────────────
 async function sheetFetch() {
   const res = await fetch(SHEET_URL, {
     mode: "cors",
@@ -168,7 +167,6 @@ function HomeScreen({ shifts, daily, weekly, monthly, yearly, syncStatus, onRefr
           </div>
         ))}
 
-        {/* Setup banner if URL not configured */}
         {!isConfigured() && (
           <div style={{ background:"#fef9c3", border:"1px solid #fde68a", borderRadius:16, padding:"16px", marginTop:10 }}>
             <div style={{ fontWeight:700, fontSize:13, color:"#92400e", marginBottom:4 }}>📋 Google Sheets not connected</div>
@@ -235,19 +233,16 @@ function LogScreen({ fares, tips, expenses, setFares, setTips, setExpenses, onSa
 function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, totalTips, totalExpenses, onBack }) {
   const [tab, setTab] = useState("income");
 
-  // Income donut: fares + tips
   const incomeDonutData = [
     { label:"Fares", value:totalFares, color:"#7c3aed" },
     { label:"Tips",  value:totalTips,  color:"#a78bfa" },
   ].filter(d => d.value > 0);
   const incomeTotal = totalFares + totalTips;
 
-  // Expenses donut (single slice for now, extensible)
   const expDonutData = [
     { label:"Expenses", value:totalExpenses, color:"#f59e0b" },
   ].filter(d => d.value > 0);
 
-  // Per-period helpers
   const sumFares   = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.fares)||0), 0);
   const sumTips    = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.tips)||0), 0);
   const sumExp     = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.expenses)||0), 0);
@@ -274,23 +269,19 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
 
   return (
     <div style={{ padding:"0 18px 20px" }}>
-      {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"52px 0 16px" }}>
         <button onClick={onBack} style={{ width:42,height:42,background:"#fff",border:"none",borderRadius:14,fontSize:20,cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.08)",color:"#6d28d9" }}>‹</button>
         <div style={{ fontWeight:800, fontSize:18, color:"#1e1b4b" }}>Activity</div>
         <div style={{ width:42 }} />
       </div>
 
-      {/* Pill tabs */}
       <div style={{ display:"flex", background:"#ede9fe", borderRadius:50, padding:4, marginBottom:20, gap:4 }}>
         <Pill id="income"   label="💰 Income" />
         <Pill id="expenses" label="⛽ Expenses" />
       </div>
 
-      {/* ── INCOME TAB ── */}
       {tab === "income" && (
         <>
-          {/* Summary card */}
           <div style={{ background:"linear-gradient(150deg,#ede9fe 0%,#ddd6fe 100%)", borderRadius:24, padding:"22px 20px 28px", marginBottom:18 }}>
             <div style={{ fontSize:12, color:"#7c3aed", fontWeight:600 }}>Total Income (All Time)</div>
             <div style={{ fontSize:28, fontWeight:900, color:"#4c1d95", marginBottom:4, letterSpacing:"-0.5px" }}>{fmt(incomeTotal)}</div>
@@ -304,7 +295,6 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
             </div>
           </div>
 
-          {/* Fares vs Tips breakdown */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
             {[
               { l:"Total Fares", v:totalFares, c:"#7c3aed", bg:"#f5f3ff", pct: incomeTotal>0 ? Math.round(totalFares/incomeTotal*100) : 0 },
@@ -321,7 +311,6 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
             ))}
           </div>
 
-          {/* Period breakdown */}
           <div style={{ fontWeight:700, fontSize:15, color:"#1e1b4b", marginBottom:12 }}>Period Breakdown</div>
           {periods.map(({ label, icon, fn }) => {
             const f = sumFares(fn), t = sumTips(fn), net = f + t;
@@ -350,10 +339,8 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
         </>
       )}
 
-      {/* ── EXPENSES TAB ── */}
       {tab === "expenses" && (
         <>
-          {/* Summary card */}
           <div style={{ background:"linear-gradient(150deg,#fef9c3 0%,#fde68a 100%)", borderRadius:24, padding:"22px 20px 28px", marginBottom:18 }}>
             <div style={{ fontSize:12, color:"#92400e", fontWeight:600 }}>Total Expenses (All Time)</div>
             <div style={{ fontSize:28, fontWeight:900, color:"#92400e", marginBottom:4, letterSpacing:"-0.5px" }}>{fmt(totalExpenses)}</div>
@@ -369,7 +356,6 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
             </div>
           </div>
 
-          {/* Net impact card */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
             <div style={{ background:"#fff7ed", borderRadius:18, padding:"16px 14px" }}>
               <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>Gross Income</div>
@@ -383,7 +369,6 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
             </div>
           </div>
 
-          {/* Period breakdown */}
           <div style={{ fontWeight:700, fontSize:15, color:"#1e1b4b", marginBottom:12 }}>Period Breakdown</div>
           {periods.map(({ label, icon, fn }) => {
             const e = sumExp(fn), inc = sumFares(fn) + sumTips(fn);
@@ -397,7 +382,6 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
                   </div>
                   <span style={{ fontWeight:900, color:"#d97706", fontSize:15 }}>{fmt(e)}</span>
                 </div>
-                {/* Expense vs income bar */}
                 <div style={{ background:"#f3f4f6", borderRadius:10, height:8, marginBottom:6, overflow:"hidden" }}>
                   <div style={{ width:`${Math.min(pct,100)}%`, background:"linear-gradient(90deg,#f59e0b,#fbbf24)", borderRadius:10, height:8, transition:"width 0.5s" }} />
                 </div>
@@ -425,7 +409,7 @@ function HistoryScreen({ shifts, onDelete, onBack }) {
         <div style={{ textAlign:"center", padding:"40px", color:"#c4b5fd", fontSize:14 }}>
           <div style={{ fontSize:40, marginBottom:8 }}>🚕</div>No shifts logged yet.
         </div>
-      ) : shifts.map(s => (
+      ) : [...shifts].sort((a, b) => Number(b.id) - Number(a.id)).map(s => (
         <div key={s.id} style={{ background:"#fff", borderRadius:20, padding:"16px", marginBottom:12, boxShadow:"0 2px 12px rgba(0,0,0,0.05)" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <div>
@@ -451,7 +435,7 @@ function HistoryScreen({ shifts, onDelete, onBack }) {
   );
 }
 
-// ── APP ───────────────────────────────────────────────────────
+// ── APP MAIN ENTRY ────────────────────────────────────────────
 export default function App() {
   const [shifts, setShifts]   = useState([]);
   const [screen, setScreen]   = useState("home");
@@ -462,7 +446,6 @@ export default function App() {
   const [saved, setSaved]     = useState(false);
   const [syncStatus, setSyncStatus] = useState("synced");
 
-  // Load: try Sheets first, fall back to localStorage
   const loadShifts = async () => {
     if (isConfigured()) {
       try {
@@ -500,7 +483,6 @@ export default function App() {
       time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }),
       fares: parseFloat(fares)||0, tips: parseFloat(tips)||0, expenses: parseFloat(expenses)||0,
     };
-    // Optimistic update
     const updated = [entry, ...shifts];
     setShifts(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -536,42 +518,59 @@ export default function App() {
   };
 
   const navItems = [
-    { icon:"🏠", label:"Home",     sc:"home" },
-    { icon:"📊", label:"Activity", sc:"activity" },
-    { icon:"➕", label:"Log",      sc:"log", main:true },
-    { icon:"📋", label:"History",  sc:"history" },
+    { id:"home",     icon:"🏠", label:"Home"     },
+    { id:"log",      icon:"➕", label:"Log"      },
+    { id:"activity", icon:"📊", label:"Activity" },
+    { id:"history",  icon:"📋", label:"History"  },
   ];
 
   return (
-    <div style={{ minHeight:"100vh", background:"#f5f3ff", fontFamily:"'DM Sans','Segoe UI',sans-serif", maxWidth:430, margin:"0 auto", position:"relative", paddingBottom:90 }}>
-
+    <div style={{ maxWidth:430, margin:"0 auto", minHeight:"100vh", background:"#f8f7ff", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", position:"relative", paddingBottom:80 }}>
       {screen === "home" && (
-        <HomeScreen shifts={shifts} daily={daily} weekly={weekly} monthly={monthly} yearly={yearly}
-          syncStatus={syncStatus} onRefresh={loadShifts} onNav={setScreen} />
+        <HomeScreen
+          shifts={[...shifts].sort((a,b) => Number(b.id)-Number(a.id))}
+          daily={daily} weekly={weekly} monthly={monthly} yearly={yearly}
+          syncStatus={syncStatus}
+          onRefresh={loadShifts}
+          onNav={setScreen}
+        />
       )}
       {screen === "log" && (
-        <LogScreen fares={fares} tips={tips} expenses={expenses}
+        <LogScreen
+          fares={fares} tips={tips} expenses={expenses}
           setFares={setFares} setTips={setTips} setExpenses={setExpenses}
           onSave={handleSave} saving={saving} saved={saved}
-          onBack={() => setScreen("home")} />
+          onBack={() => setScreen("home")}
+        />
       )}
       {screen === "activity" && (
-        <ActivityScreen shifts={shifts} daily={daily} weekly={weekly} monthly={monthly} yearly={yearly}
+        <ActivityScreen
+          shifts={shifts}
+          daily={daily} weekly={weekly} monthly={monthly} yearly={yearly}
           totalFares={totalFares} totalTips={totalTips} totalExpenses={totalExpenses}
-          onBack={() => setScreen("home")} />
+          onBack={() => setScreen("home")}
+        />
       )}
       {screen === "history" && (
-        <HistoryScreen shifts={shifts} onDelete={handleDelete} onBack={() => setScreen("home")} />
+        <HistoryScreen
+          shifts={shifts}
+          onDelete={handleDelete}
+          onBack={() => setScreen("home")}
+        />
       )}
 
-      <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:430, background:"rgba(255,255,255,0.95)", backdropFilter:"blur(12px)", borderTop:"1px solid #ede9fe", padding:"10px 24px 22px", display:"flex", justifyContent:"space-around", alignItems:"center", zIndex:100 }}>
-        {navItems.map(({ icon, label, sc, main }) => (
-          <button key={sc} onClick={() => setScreen(sc)}
-            style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3, background: main?"linear-gradient(135deg,#6d28d9,#8b5cf6)":"none", border:"none", borderRadius: main?"50%":"none", width: main?58:"auto", height: main?58:"auto", cursor:"pointer", padding: main?0:"4px 8px", boxShadow: main?"0 6px 24px rgba(109,40,217,0.4)":"none", marginTop: main?-26:0, justifyContent:"center" }}>
-            <span style={{ fontSize: main?24:20 }}>{icon}</span>
-            {!main && <span style={{ fontSize:10, color: screen===sc?"#6d28d9":"#9ca3af", fontWeight: screen===sc?700:400 }}>{label}</span>}
-          </button>
-        ))}
+      {/* ── BOTTOM NAV ── */}
+      <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:430, background:"#fff", borderTop:"1px solid #ede9fe", display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom)" }}>
+        {navItems.map(({ id, icon, label }) => {
+          const active = screen === id;
+          return (
+            <button key={id} onClick={() => setScreen(id)} style={{ flex:1, padding:"10px 0 8px", background:"none", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+              <div style={{ fontSize:20, lineHeight:1 }}>{icon}</div>
+              <div style={{ fontSize:10, fontWeight: active ? 700 : 500, color: active ? "#6d28d9" : "#9ca3af", letterSpacing:"0.02em" }}>{label}</div>
+              {active && <div style={{ width:18, height:3, borderRadius:10, background:"#6d28d9", marginTop:1 }} />}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
