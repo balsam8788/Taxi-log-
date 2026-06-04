@@ -3,12 +3,11 @@ import { useState, useEffect } from "react";
 // ═══════════════════════════════════════════════════════════════
 //  PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
 // ═══════════════════════════════════════════════════════════════
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbz84YQpk37ZG6nd6kxuEW13zC5RrsZIWQyTfe3C6dMIMVLZzxY4KqQSfmdK7wRt4fG9/exec";
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbwOxkNMknkYLd04iRUdEQiWhThsHmgq1NHgkQXQFhb5YM2D_mjMdpuDJGI3JaoEA0Mfdg/exec";
 // ═══════════════════════════════════════════════════════════════
 
 const STORAGE_KEY = "taxi_shifts_v4";
 const fmt = (v) => `Rf ${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtPlain = (v) => Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const weekStartKey = () => {
   const d = new Date(); const day = d.getDay();
@@ -30,9 +29,9 @@ const migrateShift = (s) => ({
 
 // ── Google Sheets API helpers ─────────────────────────────────
 async function sheetFetch() {
-  const res = await fetch(SHEET_URL, {
-    mode: "cors",
-    redirect: "follow"
+  const res = await fetch(SHEET_URL + "?t=" + Date.now(), {
+    method: "GET",
+    credentials: "omit",
   });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error);
@@ -42,8 +41,7 @@ async function sheetFetch() {
 async function sheetSave(shift) {
   await fetch(SHEET_URL, {
     method: "POST",
-    mode: "cors",
-    redirect: "follow",
+    credentials: "omit",
     headers: {
       "Content-Type": "text/plain;charset=utf-8",
     },
@@ -54,8 +52,7 @@ async function sheetSave(shift) {
 async function sheetDelete(id) {
   await fetch(SHEET_URL, {
     method: "POST",
-    mode: "cors",
-    redirect: "follow",
+    credentials: "omit",
     headers: {
       "Content-Type": "text/plain;charset=utf-8",
     },
@@ -237,7 +234,7 @@ function LogScreen({ fares, fuel, otherExp, setFares, setFuel, setOtherExp, onSa
 }
 
 // ── ACTIVITY ──────────────────────────────────────────────────
-function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, totalFuel, totalOtherExp, onBack }) {
+function ActivityScreen({ shifts, totalFares, totalFuel, totalOtherExp, onBack }) {
   const [tab, setTab] = useState("income");
 
   const totalExpenses = totalFuel + totalOtherExp;
@@ -571,7 +568,6 @@ export default function App() {
       {screen === "activity" && (
         <ActivityScreen
           shifts={shifts}
-          daily={daily} weekly={weekly} monthly={monthly} yearly={yearly}
           totalFares={totalFares} totalFuel={totalFuel} totalOtherExp={totalOtherExp}
           onBack={() => setScreen("home")}
         />
