@@ -3,12 +3,12 @@ import { useState, useEffect } from "react";
 // ═══════════════════════════════════════════════════════════════
 //  PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
 // ═══════════════════════════════════════════════════════════════
-const SHEET_URL = "https://script.google.com/macros/s/AKfycbwOxkNMknkYLd04iRUdEQiWhThsHmgq1NHgkQXQFhb5YM2D_mjMdpuDJGI3JaoEA0Mfdg/exec";
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbz84YQpk37ZG6nd6kxuEW13zC5RrsZIWQyTfe3C6dMIMVLZzxY4KqQSfmdK7wRt4fG9/exec";
 // ═══════════════════════════════════════════════════════════════
 
-const STORAGE_KEY = "taxi_shifts_v3";
+const STORAGE_KEY = "taxi_shifts_v4";
 const fmt = (v) => `Rf ${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtTips = (v) => Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtPlain = (v) => Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const weekStartKey = () => {
   const d = new Date(); const day = d.getDay();
@@ -18,8 +18,15 @@ const weekStartKey = () => {
 const monthKey = () => new Date().toISOString().slice(0, 7);
 const dayName = () => new Date().toLocaleDateString("en-US", { weekday: "long" });
 const dateStr = () => new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" });
-const netOf = (s) => (Number(s.fares)||0) + (Number(s.tips)||0) - (Number(s.expenses)||0);
+const netOf = (s) => (Number(s.fares)||0) - (Number(s.fuel)||0) - (Number(s.otherExp)||0);
 const isConfigured = () => SHEET_URL && SHEET_URL !== "YOUR_APPS_SCRIPT_URL_HERE";
+
+// Migrates old schema fields (tips → ignored, expenses → otherExp) to new schema
+const migrateShift = (s) => ({
+  ...s,
+  fuel:     s.fuel     !== undefined ? s.fuel     : 0,
+  otherExp: s.otherExp !== undefined ? s.otherExp : (s.expenses !== undefined ? s.expenses : 0),
+});
 
 // ── Google Sheets API helpers ─────────────────────────────────
 async function sheetFetch() {
@@ -181,8 +188,8 @@ function HomeScreen({ shifts, daily, weekly, monthly, yearly, syncStatus, onRefr
 }
 
 // ── LOG ───────────────────────────────────────────────────────
-function LogScreen({ fares, tips, expenses, setFares, setTips, setExpenses, onSave, saving, saved, onBack }) {
-  const preview = (parseFloat(fares)||0) + (parseFloat(tips)||0) - (parseFloat(expenses)||0);
+function LogScreen({ fares, fuel, otherExp, setFares, setFuel, setOtherExp, onSave, saving, saved, onBack }) {
+  const preview = (parseFloat(fares)||0) - (parseFloat(fuel)||0) - (parseFloat(otherExp)||0);
   return (
     <div style={{ padding:"0 18px 30px" }}>
       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"52px 0 20px" }}>
@@ -197,9 +204,9 @@ function LogScreen({ fares, tips, expenses, setFares, setTips, setExpenses, onSa
       </div>
 
       {[
-        { label:"Fares",    icon:"💵", val:fares,    set:setFares,    hint:"Total fares collected", c:"#7c3aed" },
-        { label:"Tips",     icon:"💰", val:tips,     set:setTips,     hint:"Tips received",         c:"#059669" },
-        { label:"Expenses", icon:"⛽", val:expenses, set:setExpenses, hint:"Fuel, tolls, etc.",     c:"#d97706" },
+        { label:"Fares",           icon:"💵", val:fares,    set:setFares,    hint:"Total fares collected", c:"#7c3aed" },
+        { label:"Fuel",            icon:"⛽", val:fuel,     set:setFuel,     hint:"Fuel cost",             c:"#dc2626" },
+        { label:"Other Expenses",  icon:"🧾", val:otherExp, set:setOtherExp, hint:"Tolls, maintenance…",   c:"#d97706" },
       ].map(({ label, icon, val, set, hint, c }) => (
         <div key={label} style={{ background:"#fff", borderRadius:20, padding:"18px", marginBottom:14, boxShadow:"0 2px 12px rgba(0,0,0,0.05)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
@@ -230,22 +237,20 @@ function LogScreen({ fares, tips, expenses, setFares, setTips, setExpenses, onSa
 }
 
 // ── ACTIVITY ──────────────────────────────────────────────────
-function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, totalTips, totalExpenses, onBack }) {
+function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, totalFuel, totalOtherExp, onBack }) {
   const [tab, setTab] = useState("income");
 
-  const incomeDonutData = [
-    { label:"Fares", value:totalFares, color:"#7c3aed" },
-    { label:"Tips",  value:totalTips,  color:"#a78bfa" },
-  ].filter(d => d.value > 0);
-  const incomeTotal = totalFares + totalTips;
+  const totalExpenses = totalFuel + totalOtherExp;
+  const incomeTotal = totalFares;
 
   const expDonutData = [
-    { label:"Expenses", value:totalExpenses, color:"#f59e0b" },
+    { label:"Fuel",  value:totalFuel,     color:"#dc2626" },
+    { label:"Other", value:totalOtherExp, color:"#f59e0b" },
   ].filter(d => d.value > 0);
 
-  const sumFares   = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.fares)||0), 0);
-  const sumTips    = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.tips)||0), 0);
-  const sumExp     = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.expenses)||0), 0);
+  const sumFares    = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.fares)||0), 0);
+  const sumFuel     = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.fuel)||0), 0);
+  const sumOtherExp = (fn) => shifts.filter(s => fn(s.date)).reduce((a,s) => a+(Number(s.otherExp)||0), 0);
 
   const periods = [
     { label:"Today",      icon:"☀️", fn: d => d === todayKey() },
@@ -254,7 +259,7 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
     { label:"This Year",  icon:"📊", fn: d => d.startsWith(new Date().getFullYear().toString()) },
   ];
 
-  const netAll = totalFares + totalTips - totalExpenses;
+  const netAll = totalFares - totalExpenses;
 
   const Pill = ({ id, label }) => (
     <button onClick={() => setTab(id)} style={{
@@ -283,37 +288,14 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
       {tab === "income" && (
         <>
           <div style={{ background:"linear-gradient(150deg,#ede9fe 0%,#ddd6fe 100%)", borderRadius:24, padding:"22px 20px 28px", marginBottom:18 }}>
-            <div style={{ fontSize:12, color:"#7c3aed", fontWeight:600 }}>Total Income (All Time)</div>
+            <div style={{ fontSize:12, color:"#7c3aed", fontWeight:600 }}>Total Fares (All Time)</div>
             <div style={{ fontSize:28, fontWeight:900, color:"#4c1d95", marginBottom:4, letterSpacing:"-0.5px" }}>{fmt(incomeTotal)}</div>
-            <div style={{ fontSize:11, color:"#7c3aed", marginBottom:20 }}>Net after expenses: <strong>{fmt(netAll)}</strong></div>
-            <div style={{ display:"flex", justifyContent:"center", position:"relative" }}>
-              <DonutChart data={incomeDonutData} total={incomeTotal} />
-              <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", textAlign:"center", pointerEvents:"none" }}>
-                <div style={{ fontSize:17, fontWeight:900, color:"#4c1d95" }}>{fmt(incomeTotal)}</div>
-                <div style={{ fontSize:10, color:"#7c3aed", fontWeight:600 }}>Earned</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
-            {[
-              { l:"Total Fares", v:totalFares, c:"#7c3aed", bg:"#f5f3ff", pct: incomeTotal>0 ? Math.round(totalFares/incomeTotal*100) : 0 },
-              { l:"Total Tips",  v:totalTips,  c:"#8b5cf6", bg:"#f5f3ff", pct: incomeTotal>0 ? Math.round(totalTips/incomeTotal*100)  : 0, plain:true },
-            ].map(({ l, v, c, bg, pct, plain }) => (
-              <div key={l} style={{ background:bg, borderRadius:18, padding:"16px 14px" }}>
-                <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>{l}</div>
-                <div style={{ fontSize:18, fontWeight:900, color:c, marginBottom:6 }}>{plain ? fmtTips(v) : fmt(v)}</div>
-                <div style={{ background:"#ddd6fe", borderRadius:10, height:6 }}>
-                  <div style={{ width:`${pct}%`, background:c, borderRadius:10, height:6, transition:"width 0.5s" }} />
-                </div>
-                <div style={{ fontSize:10, color:c, marginTop:4, fontWeight:600 }}>{pct}% of income</div>
-              </div>
-            ))}
+            <div style={{ fontSize:11, color:"#7c3aed", marginBottom:4 }}>Net after expenses: <strong>{fmt(netAll)}</strong></div>
           </div>
 
           <div style={{ fontWeight:700, fontSize:15, color:"#1e1b4b", marginBottom:12 }}>Period Breakdown</div>
           {periods.map(({ label, icon, fn }) => {
-            const f = sumFares(fn), t = sumTips(fn), net = f + t;
+            const f = sumFares(fn), fu = sumFuel(fn), o = sumOtherExp(fn), net = f - fu - o;
             return (
               <div key={label} style={{ background:"#fff", borderRadius:16, padding:"14px 16px", marginBottom:10, boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
@@ -321,16 +303,20 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
                     <span style={{ fontSize:16 }}>{icon}</span>
                     <span style={{ fontWeight:700, color:"#1e1b4b", fontSize:14 }}>{label}</span>
                   </div>
-                  <span style={{ fontWeight:900, color:"#6d28d9", fontSize:15 }}>{fmt(net)}</span>
+                  <span style={{ fontWeight:900, color: net>=0?"#6d28d9":"#dc2626", fontSize:15 }}>{fmt(net)}</span>
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
                   <div style={{ flex:1, background:"#f5f3ff", borderRadius:10, padding:"8px 10px" }}>
                     <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>FARES</div>
                     <div style={{ fontSize:13, fontWeight:800, color:"#7c3aed" }}>{fmt(f)}</div>
                   </div>
-                  <div style={{ flex:1, background:"#f0fdf4", borderRadius:10, padding:"8px 10px" }}>
-                    <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>TIPS</div>
-                    <div style={{ fontSize:13, fontWeight:800, color:"#059669" }}>{fmtTips(t)}</div>
+                  <div style={{ flex:1, background:"#fff1f2", borderRadius:10, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>FUEL</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:"#dc2626" }}>{fmt(fu)}</div>
+                  </div>
+                  <div style={{ flex:1, background:"#fffbeb", borderRadius:10, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>OTHER</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:"#d97706" }}>{fmt(o)}</div>
                   </div>
                 </div>
               </div>
@@ -354,15 +340,43 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
                 <div style={{ fontSize:10, color:"#b45309", fontWeight:600 }}>Spent</div>
               </div>
             </div>
+            {/* Legend */}
+            <div style={{ display:"flex", justifyContent:"center", gap:16, marginTop:14 }}>
+              {[["⛽ Fuel","#dc2626",totalFuel],["🧾 Other","#f59e0b",totalOtherExp]].map(([lbl,col,val])=>(
+                <div key={lbl} style={{ display:"flex", alignItems:"center", gap:5 }}>
+                  <div style={{ width:10, height:10, borderRadius:"50%", background:col }} />
+                  <span style={{ fontSize:11, color:"#92400e", fontWeight:600 }}>{lbl}: {fmt(val)}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
-            <div style={{ background:"#fff7ed", borderRadius:18, padding:"16px 14px" }}>
-              <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>Gross Income</div>
-              <div style={{ fontSize:16, fontWeight:900, color:"#059669" }}>{fmt(incomeTotal)}</div>
-              <div style={{ fontSize:10, color:"#6b7280", marginTop:4 }}>Fares + Tips</div>
+            <div style={{ background:"#fff1f2", borderRadius:18, padding:"16px 14px" }}>
+              <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>⛽ Total Fuel</div>
+              <div style={{ fontSize:18, fontWeight:900, color:"#dc2626", marginBottom:6 }}>{fmt(totalFuel)}</div>
+              <div style={{ background:"#fecdd3", borderRadius:10, height:6 }}>
+                <div style={{ width:`${totalExpenses>0?Math.round(totalFuel/totalExpenses*100):0}%`, background:"#dc2626", borderRadius:10, height:6, transition:"width 0.5s" }} />
+              </div>
+              <div style={{ fontSize:10, color:"#dc2626", marginTop:4, fontWeight:600 }}>{totalExpenses>0?Math.round(totalFuel/totalExpenses*100):0}% of expenses</div>
             </div>
             <div style={{ background:"#fff7ed", borderRadius:18, padding:"16px 14px" }}>
+              <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>🧾 Other Exp.</div>
+              <div style={{ fontSize:18, fontWeight:900, color:"#d97706", marginBottom:6 }}>{fmt(totalOtherExp)}</div>
+              <div style={{ background:"#fde68a", borderRadius:10, height:6 }}>
+                <div style={{ width:`${totalExpenses>0?Math.round(totalOtherExp/totalExpenses*100):0}%`, background:"#d97706", borderRadius:10, height:6, transition:"width 0.5s" }} />
+              </div>
+              <div style={{ fontSize:10, color:"#d97706", marginTop:4, fontWeight:600 }}>{totalExpenses>0?Math.round(totalOtherExp/totalExpenses*100):0}% of expenses</div>
+            </div>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+            <div style={{ background:"#f0fdf4", borderRadius:18, padding:"16px 14px" }}>
+              <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>Gross Income</div>
+              <div style={{ fontSize:16, fontWeight:900, color:"#059669" }}>{fmt(incomeTotal)}</div>
+              <div style={{ fontSize:10, color:"#6b7280", marginTop:4 }}>Total fares</div>
+            </div>
+            <div style={{ background:"#f0fdf4", borderRadius:18, padding:"16px 14px" }}>
               <div style={{ fontSize:10, color:"#9ca3af", marginBottom:6 }}>Net Profit</div>
               <div style={{ fontSize:16, fontWeight:900, color: netAll>=0?"#059669":"#dc2626" }}>{fmt(netAll)}</div>
               <div style={{ fontSize:10, color:"#6b7280", marginTop:4 }}>After expenses</div>
@@ -371,7 +385,7 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
 
           <div style={{ fontWeight:700, fontSize:15, color:"#1e1b4b", marginBottom:12 }}>Period Breakdown</div>
           {periods.map(({ label, icon, fn }) => {
-            const e = sumExp(fn), inc = sumFares(fn) + sumTips(fn);
+            const fu = sumFuel(fn), o = sumOtherExp(fn), e = fu + o, inc = sumFares(fn);
             const pct = inc > 0 ? Math.round(e/inc*100) : 0;
             return (
               <div key={label} style={{ background:"#fff", borderRadius:16, padding:"14px 16px", marginBottom:10, boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
@@ -381,6 +395,16 @@ function ActivityScreen({ shifts, daily, weekly, monthly, yearly, totalFares, to
                     <span style={{ fontWeight:700, color:"#1e1b4b", fontSize:14 }}>{label}</span>
                   </div>
                   <span style={{ fontWeight:900, color:"#d97706", fontSize:15 }}>{fmt(e)}</span>
+                </div>
+                <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                  <div style={{ flex:1, background:"#fff1f2", borderRadius:10, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>FUEL</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:"#dc2626" }}>{fmt(fu)}</div>
+                  </div>
+                  <div style={{ flex:1, background:"#fffbeb", borderRadius:10, padding:"8px 10px" }}>
+                    <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>OTHER</div>
+                    <div style={{ fontSize:13, fontWeight:800, color:"#d97706" }}>{fmt(o)}</div>
+                  </div>
                 </div>
                 <div style={{ background:"#f3f4f6", borderRadius:10, height:8, marginBottom:6, overflow:"hidden" }}>
                   <div style={{ width:`${Math.min(pct,100)}%`, background:"linear-gradient(90deg,#f59e0b,#fbbf24)", borderRadius:10, height:8, transition:"width 0.5s" }} />
@@ -422,7 +446,7 @@ function HistoryScreen({ shifts, onDelete, onBack }) {
             </div>
           </div>
           <div style={{ display:"flex", gap:8 }}>
-            {[["Fares",s.fares,"#f5f3ff","#7c3aed",fmt],["Tips",s.tips,"#f0fdf4","#059669",fmtTips],["Exp.",s.expenses,"#fffbeb","#d97706",fmt]].map(([l,v,bg,col,f])=>(
+            {[["Fares",s.fares,"#f5f3ff","#7c3aed",fmt],["Fuel",s.fuel,"#fff1f2","#dc2626",fmt],["Other",s.otherExp,"#fffbeb","#d97706",fmt]].map(([l,v,bg,col,f])=>(
               <div key={l} style={{ flex:1,background:bg,borderRadius:12,padding:"10px 12px" }}>
                 <div style={{ fontSize:10,color:col,fontWeight:600,marginBottom:2 }}>{l}</div>
                 <div style={{ fontSize:13,fontWeight:800,color:col }}>{f(Number(v))}</div>
@@ -439,9 +463,9 @@ function HistoryScreen({ shifts, onDelete, onBack }) {
 export default function App() {
   const [shifts, setShifts]   = useState([]);
   const [screen, setScreen]   = useState("home");
-  const [fares, setFares]     = useState("");
-  const [tips, setTips]       = useState("");
-  const [expenses, setExpenses] = useState("");
+  const [fares, setFares]       = useState("");
+  const [fuel, setFuel]         = useState("");
+  const [otherExp, setOtherExp] = useState("");
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [syncStatus, setSyncStatus] = useState("synced");
@@ -451,17 +475,18 @@ export default function App() {
       try {
         setSyncStatus("syncing");
         const remote = await sheetFetch();
-        setShifts(remote);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
+        const migrated = remote.map(migrateShift);
+        setShifts(migrated);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
         setSyncStatus("synced");
       } catch {
         setSyncStatus("error");
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) setShifts(JSON.parse(raw));
+        if (raw) setShifts(JSON.parse(raw).map(migrateShift));
       }
     } else {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setShifts(JSON.parse(raw));
+      if (raw) setShifts(JSON.parse(raw).map(migrateShift));
     }
   };
 
@@ -473,20 +498,20 @@ export default function App() {
   const monthly = sumBy(d => d.startsWith(monthKey()));
   const yearly  = sumBy(d => d.startsWith(new Date().getFullYear().toString()));
   const totalFares    = shifts.reduce((a,s)=>a+(Number(s.fares)||0),0);
-  const totalTips     = shifts.reduce((a,s)=>a+(Number(s.tips)||0),0);
-  const totalExpenses = shifts.reduce((a,s)=>a+(Number(s.expenses)||0),0);
+  const totalFuel     = shifts.reduce((a,s)=>a+(Number(s.fuel)||0),0);
+  const totalOtherExp = shifts.reduce((a,s)=>a+(Number(s.otherExp)||0),0);
 
   const handleSave = async () => {
-    if (!fares && !tips && !expenses) return;
+    if (!fares && !fuel && !otherExp) return;
     const entry = {
       id: String(Date.now()), date: todayKey(),
       time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }),
-      fares: parseFloat(fares)||0, tips: parseFloat(tips)||0, expenses: parseFloat(expenses)||0,
+      fares: parseFloat(fares)||0, fuel: parseFloat(fuel)||0, otherExp: parseFloat(otherExp)||0,
     };
     const updated = [entry, ...shifts];
     setShifts(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    setFares(""); setTips(""); setExpenses("");
+    setFares(""); setFuel(""); setOtherExp("");
     setSaving(true);
     if (isConfigured()) {
       try {
@@ -537,8 +562,8 @@ export default function App() {
       )}
       {screen === "log" && (
         <LogScreen
-          fares={fares} tips={tips} expenses={expenses}
-          setFares={setFares} setTips={setTips} setExpenses={setExpenses}
+          fares={fares} fuel={fuel} otherExp={otherExp}
+          setFares={setFares} setFuel={setFuel} setOtherExp={setOtherExp}
           onSave={handleSave} saving={saving} saved={saved}
           onBack={() => setScreen("home")}
         />
@@ -547,7 +572,7 @@ export default function App() {
         <ActivityScreen
           shifts={shifts}
           daily={daily} weekly={weekly} monthly={monthly} yearly={yearly}
-          totalFares={totalFares} totalTips={totalTips} totalExpenses={totalExpenses}
+          totalFares={totalFares} totalFuel={totalFuel} totalOtherExp={totalOtherExp}
           onBack={() => setScreen("home")}
         />
       )}
