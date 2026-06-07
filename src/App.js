@@ -137,19 +137,34 @@ function HomeScreen({ shifts, yearly, syncStatus, onRefresh, onNav }) {
     return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
   };
 
+  const fmtLong = (ym) => {
+    const [y, m] = ym.split("-");
+    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  };
+
   const pct = (a, b) => b === 0 ? null : Math.round(((a - b) / Math.abs(b)) * 100);
 
-  const thisYm  = now.toISOString().slice(0, 7);
-  const lastYm  = (() => { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); })();
-  const cur  = getMonthData(thisYm);
-  const prev = getMonthData(lastYm);
+  const thisYm = now.toISOString().slice(0, 7);
 
-  // 6-month chart
-  const chartMonths = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now); d.setMonth(d.getMonth() - (5 - i));
-    return d.toISOString().slice(0, 7);
-  });
-  const chartData = chartMonths.map(ym => ({ ym, ...getMonthData(ym) }));
+  // All months with data, sorted oldest→newest
+  const allMonths = (() => {
+    const seen = new Set();
+    shifts.forEach(s => { if (s.date) seen.add(s.date.slice(0, 7)); });
+    seen.add(thisYm);
+    return [...seen].sort();
+  })();
+
+  const [selectedYm, setSelectedYm] = useState(thisYm);
+
+  const prevYm = (() => {
+    const idx = allMonths.indexOf(selectedYm);
+    return idx > 0 ? allMonths[idx - 1] : null;
+  })();
+
+  const cur  = getMonthData(selectedYm);
+  const prev = prevYm ? getMonthData(prevYm) : null;
+
+  const chartData = allMonths.map(ym => ({ ym, ...getMonthData(ym) }));
   const maxNet    = Math.max(...chartData.map(d => Math.abs(d.net)), 1);
 
   const Delta = ({ val, invert }) => {
@@ -162,8 +177,6 @@ function HomeScreen({ shifts, yearly, syncStatus, onRefresh, onNav }) {
       </span>
     );
   };
-
-  const monthName = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString("en-US", { month: "long" });
 
   return (
     <div style={{ paddingBottom: 20 }}>
@@ -194,73 +207,61 @@ function HomeScreen({ shifts, yearly, syncStatus, onRefresh, onNav }) {
 
         {/* Monthly comparison section */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-          <div style={{ fontWeight:800, fontSize:16, color:"#1e1b4b" }}>📅 {monthName}</div>
-          <Delta val={pct(cur.net, prev.net)} invert={false} />
+          <div style={{ fontWeight:800, fontSize:16, color:"#1e1b4b" }}>📅 {fmtLong(selectedYm)}</div>
+          {prev && <Delta val={pct(cur.net, prev.net)} invert={false} />}
         </div>
 
-        {/* 4 stat cards */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+        {/* 3 stat cards - Fuel, Other Exp, Net Profit */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:20 }}>
           {[
-            { label:"Gross Fares", icon:"💵", cur:cur.fares,    prev:prev.fares,    c:"#7c3aed", bg:"#f5f3ff", invert:false },
-            { label:"Fuel",        icon:"⛽", cur:cur.fuel,     prev:prev.fuel,     c:"#dc2626", bg:"#fff1f2", invert:true  },
-            { label:"Other Exp.",  icon:"🧾", cur:cur.otherExp, prev:prev.otherExp, c:"#d97706", bg:"#fffbeb", invert:true  },
-            { label:"Net Profit",  icon:"📈", cur:cur.net,      prev:prev.net,      c:"#059669", bg:"#f0fdf4", invert:false },
+            { label:"Fuel",       icon:"⛽", cur:cur.fuel,     prev:prev?.fuel,     c:"#dc2626", bg:"#fff1f2", invert:true  },
+            { label:"Other Exp.", icon:"🧾", cur:cur.otherExp, prev:prev?.otherExp, c:"#d97706", bg:"#fffbeb", invert:true  },
+            { label:"Net Profit", icon:"📈", cur:cur.net,      prev:prev?.net,      c:"#059669", bg:"#f0fdf4", invert:false },
           ].map(({ label, icon, cur: cv, prev: pv, c, bg, invert }) => (
-            <div key={label} style={{ background:bg, borderRadius:18, padding:"14px" }}>
-              <div style={{ fontSize:16, marginBottom:6 }}>{icon}</div>
-              <div style={{ fontSize:16, fontWeight:900, color:c, marginBottom:3 }}>{fmt(cv)}</div>
-              <div style={{ fontSize:10, color:"#9ca3af", marginBottom:5 }}>{label}</div>
-              <Delta val={pct(cv, pv)} invert={invert} />
+            <div key={label} style={{ background:bg, borderRadius:18, padding:"12px 10px" }}>
+              <div style={{ fontSize:15, marginBottom:5 }}>{icon}</div>
+              <div style={{ fontSize:14, fontWeight:900, color:c, marginBottom:2 }}>{fmt(cv)}</div>
+              <div style={{ fontSize:9, color:"#9ca3af", marginBottom:5 }}>{label}</div>
+              {pv !== undefined && <Delta val={pct(cv, pv)} invert={invert} />}
             </div>
           ))}
         </div>
 
-        {/* Shifts & days row */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
-          {[
-            { label:"Shifts this month", val:cur.shifts, prev:prev.shifts, icon:"🚕" },
-            { label:"Days worked",       val:cur.days,   prev:prev.days,   icon:"📆" },
-          ].map(({ label, val, prev: pv, icon }) => (
-            <div key={label} style={{ background:"#fff", borderRadius:18, padding:"14px", boxShadow:"0 2px 10px rgba(0,0,0,0.04)", display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ fontSize:22 }}>{icon}</div>
-              <div>
-                <div style={{ fontSize:18, fontWeight:900, color:"#1e1b4b" }}>{val}</div>
-                <div style={{ fontSize:10, color:"#9ca3af" }}>{label}</div>
-                <Delta val={pct(val, pv)} invert={false} />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 6-month bar chart */}
+        {/* Bar chart — all months with data, tappable */}
         <div style={{ background:"#fff", borderRadius:20, padding:"18px 14px 12px", marginBottom:20, boxShadow:"0 2px 10px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontWeight:700, fontSize:13, color:"#1e1b4b", marginBottom:14 }}>6-Month Net Income</div>
-          <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:100 }}>
-            {chartData.map((d) => {
-              const isThis = d.ym === thisYm;
-              const h = Math.max(Math.round((Math.abs(d.net) / maxNet) * 84), 4);
-              const positive = d.net >= 0;
-              return (
-                <div key={d.ym} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
-                  <div style={{ fontSize:8, color: isThis ? "#6d28d9" : "#9ca3af", fontWeight: isThis ? 800 : 500, textAlign:"center" }}>
-                    {fmt(d.net).replace("Rf ","")}
+          <div style={{ fontWeight:700, fontSize:13, color:"#1e1b4b", marginBottom:14 }}>Net Income by Month</div>
+          <div style={{ overflowX: chartData.length > 6 ? "auto" : "visible", paddingBottom: chartData.length > 6 ? 4 : 0 }}>
+            <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:100, minWidth: chartData.length > 6 ? chartData.length * 44 : "auto" }}>
+              {chartData.map((d) => {
+                const isSelected = d.ym === selectedYm;
+                const h = Math.max(Math.round((Math.abs(d.net) / maxNet) * 84), 4);
+                const positive = d.net >= 0;
+                return (
+                  <div key={d.ym} onClick={() => setSelectedYm(d.ym)}
+                    style={{ flex: chartData.length <= 6 ? 1 : "0 0 38px", display:"flex", flexDirection:"column", alignItems:"center", gap:3, cursor:"pointer" }}>
+                    <div style={{ fontSize:8, color: isSelected ? "#6d28d9" : "#9ca3af", fontWeight: isSelected ? 800 : 500, textAlign:"center" }}>
+                      {fmt(d.net).replace("Rf ","")}
+                    </div>
+                    <div style={{
+                      width:"100%", height:h, borderRadius:"5px 5px 0 0",
+                      background: isSelected
+                        ? "linear-gradient(180deg,#6d28d9,#8b5cf6)"
+                        : positive ? "linear-gradient(180deg,#a78bfa,#c4b5fd)" : "linear-gradient(180deg,#fca5a5,#fecaca)",
+                      boxShadow: isSelected ? "0 4px 12px rgba(109,40,217,0.4)" : "none",
+                      transition:"all 0.2s",
+                    }} />
                   </div>
-                  <div style={{
-                    width:"100%", height:h, borderRadius:"5px 5px 0 0",
-                    background: isThis
-                      ? "linear-gradient(180deg,#6d28d9,#8b5cf6)"
-                      : positive ? "linear-gradient(180deg,#a78bfa,#c4b5fd)" : "linear-gradient(180deg,#fca5a5,#fecaca)",
-                  }} />
+                );
+              })}
+            </div>
+            <div style={{ display:"flex", gap:6, marginTop:6, minWidth: chartData.length > 6 ? chartData.length * 44 : "auto" }}>
+              {chartData.map((d) => (
+                <div key={d.ym} onClick={() => setSelectedYm(d.ym)}
+                  style={{ flex: chartData.length <= 6 ? 1 : "0 0 38px", textAlign:"center", fontSize:8, color: d.ym === selectedYm ? "#6d28d9" : "#9ca3af", fontWeight: d.ym === selectedYm ? 700 : 500, cursor:"pointer" }}>
+                  {fmtShort(d.ym)}
                 </div>
-              );
-            })}
-          </div>
-          <div style={{ display:"flex", gap:6, marginTop:6 }}>
-            {chartData.map((d) => (
-              <div key={d.ym} style={{ flex:1, textAlign:"center", fontSize:8, color: d.ym === thisYm ? "#6d28d9" : "#9ca3af", fontWeight: d.ym === thisYm ? 700 : 500 }}>
-                {fmtShort(d.ym)}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
